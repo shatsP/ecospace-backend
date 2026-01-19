@@ -1,39 +1,83 @@
 import { GoogleGenAI } from "@google/genai";
-import { buildPrompt, AnalysisResult } from "./prom";
+import { buildPrompt, AnalysisResult } from "./prompt";
 
 const ai = new GoogleGenAI({ apiKey: process.env.NEXT_GEMINI_API_KEY! });
-const MODEL = "gemma-3n-e2b-it";
 
-function parseAndValidateResponse(text: string): AnalysisResult {
-  // Extract JSON from response (handle markdown code blocks if present)
+// Model can be configured via environment variable
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+
+/**
+ * Extract JSON from LLM response, handling markdown code blocks
+ */
+function extractJSON(text: string): string {
   let jsonString = text.trim();
+  
+  // Handle ```json blocks
   if (jsonString.startsWith("```json")) {
     jsonString = jsonString.slice(7);
   } else if (jsonString.startsWith("```")) {
     jsonString = jsonString.slice(3);
   }
+  
   if (jsonString.endsWith("```")) {
     jsonString = jsonString.slice(0, -3);
   }
-  jsonString = jsonString.trim();
+  
+  return jsonString.trim();
+}
 
+/**
+ * Validate array field exists and is an array
+ */
+function validateArrayField(obj: Record<string, unknown>, field: string): void {
+  if (!Array.isArray(obj[field])) {
+    throw new Error(`Invalid response: ${field} must be an array`);
+  }
+}
+
+/**
+ * Parse and validate LLM response against expected schema
+ */
+function parseAndValidateResponse(text: string): AnalysisResult {
+  const jsonString = extractJSON(text);
   const parsed = JSON.parse(jsonString);
 
-  // Validate required structure
+  // Validate summary object
   if (!parsed.summary || typeof parsed.summary !== "object") {
     throw new Error("Invalid response: missing summary object");
   }
-  if (typeof parsed.summary.status !== "string") {
-    throw new Error("Invalid response: missing summary.status");
+  
+  const { summary } = parsed;
+  
+  // Validate summary fields
+  if (typeof summary.status !== "string" || !["safe", "warning", "critical"].includes(summary.status)) {
+    throw new Error("Invalid response: summary.status must be 'safe', 'warning', or 'critical'");
   }
-  if (!Array.isArray(parsed.syntaxErrors)) {
-    throw new Error("Invalid response: syntaxErrors must be an array");
+  if (typeof summary.errorsCount !== "number") {
+    summary.errorsCount = 0;
   }
-  if (!Array.isArray(parsed.logicErrors)) {
-    throw new Error("Invalid response: logicErrors must be an array");
+  if (typeof summary.warningsCount !== "number") {
+    summary.warningsCount = 0;
   }
-  if (!Array.isArray(parsed.securityIssues)) {
-    throw new Error("Invalid response: securityIssues must be an array");
+  if (typeof summary.logicIssuesCount !== "number") {
+    summary.logicIssuesCount = 0;
+  }
+  if (typeof summary.securityIssuesCount !== "number") {
+    summary.securityIssuesCount = 0;
+  }
+
+  // Validate all array fields
+  const arrayFields = [
+    "syntaxErrors",
+    "logicErrors", 
+    "securityIssues",
+    "edgeCases",
+    "asyncIssues",
+    "suggestions"
+  ];
+  
+  for (const field of arrayFields) {
+    validateArrayField(parsed, field);
   }
 
   return parsed as AnalysisResult;

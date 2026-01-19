@@ -58,7 +58,7 @@ function parseToken(token: string): { valid: boolean; payload?: TokenPayload; me
         return { valid: false, message: "Token has expired" };
     }
 
-    // Verify signature
+    // Verify signature using constant-time comparison to prevent timing attacks
     const dataToSign = `AFKMATE-${tier}-${timestampStr}-${userId}`;
     const expectedSignature = crypto
         .createHmac("sha256", EFFECTIVE_SECRET)
@@ -66,7 +66,13 @@ function parseToken(token: string): { valid: boolean; payload?: TokenPayload; me
         .digest("hex")
         .substring(0, 12);
 
-    if (providedSignature !== expectedSignature) {
+    // Use constant-time comparison to prevent timing attacks
+    const providedBuffer = Buffer.from(providedSignature, "utf8");
+    const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+    
+    // Signatures must be same length and match
+    if (providedBuffer.length !== expectedBuffer.length || 
+        !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
         return { valid: false, message: "Invalid token signature" };
     }
 
@@ -150,9 +156,6 @@ export async function POST(req: NextRequest) {
         const result = parseToken(token);
 
         if (!result.valid) {
-            // Add small delay to prevent timing attacks
-            await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
-
             return NextResponse.json(
                 { valid: false, message: result.message },
                 { status: 401 }
@@ -179,60 +182,6 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// Also support GET for simple validation checks
-export async function GET(req: NextRequest) {
-    // Rate limiting
-    const clientId = getClientIdentifier(req);
-    const rateLimit = checkRateLimit(clientId, RATE_LIMITS.validateToken);
-
-    if (!rateLimit.success) {
-        return NextResponse.json(
-            { valid: false, message: "Too many validation attempts" },
-            { status: 429, headers: { "Retry-After": String(rateLimit.resetIn) } }
-        );
-    }
-
-    // Check if secret is configured in production
-    if (IS_PRODUCTION && !TOKEN_SECRET) {
-        return NextResponse.json(
-            { valid: false, message: "Service temporarily unavailable" },
-            { status: 503 }
-        );
-    }
-
-    const token = req.nextUrl.searchParams.get("token");
-
-    if (!token) {
-        return NextResponse.json(
-            { valid: false, message: "Token query parameter is required" },
-            { status: 400 }
-        );
-    }
-
-    // Basic validation
-    const formatCheck = validateTokenFormat(token);
-    if (!formatCheck.valid) {
-        return NextResponse.json(
-            { valid: false, message: formatCheck.error },
-            { status: 400 }
-        );
-    }
-
-    const result = parseToken(token);
-
-    if (!result.valid) {
-        await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
-        return NextResponse.json(
-            { valid: false, message: result.message },
-            { status: 401 }
-        );
-    }
-
-    return NextResponse.json({
-        valid: true,
-        tier: result.payload?.tier,
-        expiresAt: result.payload?.expiresAt
-            ? new Date(result.payload.expiresAt).toISOString()
-            : undefined
-    });
-}
+// NOTE: GET endpoint removed for security reasons
+// Tokens in URLs get logged in browser history, server logs, and proxy logs
+// Always use POST with token in request body
