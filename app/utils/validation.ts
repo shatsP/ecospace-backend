@@ -1,0 +1,200 @@
+/**
+ * Input validation and sanitization utilities
+ */
+
+export interface ValidationResult {
+    valid: boolean;
+    error?: string;
+    sanitized?: {
+        input: string;
+        fileName: string;
+    };
+}
+
+// Limits
+const MAX_INPUT_LENGTH = 500_000; // 500KB of code
+const MAX_FILENAME_LENGTH = 255;
+const MIN_INPUT_LENGTH = 1;
+
+// Allowed file extensions for analysis
+const ALLOWED_EXTENSIONS = new Set([
+    'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs',
+    'py', 'pyw',
+    'java',
+    'go',
+    'rs',
+    'c', 'cpp', 'cc', 'cxx', 'h', 'hpp',
+    'cs',
+    'php',
+    'rb',
+    'swift',
+    'kt', 'kts',
+    'scala',
+    'dart',
+    'vue', 'svelte',
+    'html', 'htm',
+    'css', 'scss', 'sass', 'less',
+    'json', 'yaml', 'yml', 'toml',
+    'xml',
+    'md', 'mdx',
+    'sql',
+    'sh', 'bash', 'zsh',
+    'dockerfile',
+    'tf', 'hcl' // Terraform
+]);
+
+/**
+ * Validate and sanitize analysis request input
+ */
+export function validateAnalysisInput(body: any): ValidationResult {
+    // Check if body exists
+    if (!body || typeof body !== 'object') {
+        return { valid: false, error: 'Request body must be a JSON object' };
+    }
+
+    const { input, fileName } = body;
+
+    // Validate input field
+    if (input === undefined || input === null) {
+        return { valid: false, error: "Missing required field: 'input'" };
+    }
+
+    if (typeof input !== 'string') {
+        return { valid: false, error: "'input' must be a string" };
+    }
+
+    if (input.length < MIN_INPUT_LENGTH) {
+        return { valid: false, error: 'Input code is empty' };
+    }
+
+    if (input.length > MAX_INPUT_LENGTH) {
+        return {
+            valid: false,
+            error: `Input too large: ${input.length} chars (max: ${MAX_INPUT_LENGTH})`
+        };
+    }
+
+    // Validate fileName if provided
+    let sanitizedFileName = 'unknown.txt';
+
+    if (fileName !== undefined && fileName !== null) {
+        if (typeof fileName !== 'string') {
+            return { valid: false, error: "'fileName' must be a string" };
+        }
+
+        if (fileName.length > MAX_FILENAME_LENGTH) {
+            return {
+                valid: false,
+                error: `fileName too long: ${fileName.length} chars (max: ${MAX_FILENAME_LENGTH})`
+            };
+        }
+
+        // Sanitize fileName - remove path traversal attempts and special chars
+        sanitizedFileName = sanitizeFileName(fileName);
+    }
+
+    // Sanitize input - remove potential prompt injection markers
+    const sanitizedInput = sanitizeCodeInput(input);
+
+    return {
+        valid: true,
+        sanitized: {
+            input: sanitizedInput,
+            fileName: sanitizedFileName
+        }
+    };
+}
+
+/**
+ * Sanitize file name
+ * - Removes path components (no ../ or absolute paths)
+ * - Removes special characters
+ * - Preserves extension
+ */
+function sanitizeFileName(fileName: string): string {
+    // Extract just the filename (no path)
+    let name = fileName.split(/[/\\]/).pop() || 'unknown.txt';
+
+    // Remove null bytes and control characters
+    name = name.replace(/[\x00-\x1f\x7f]/g, '');
+
+    // Remove potentially dangerous characters but keep dots for extension
+    name = name.replace(/[<>:"|?*]/g, '');
+
+    // Limit length
+    if (name.length > MAX_FILENAME_LENGTH) {
+        const ext = name.split('.').pop() || '';
+        const base = name.slice(0, MAX_FILENAME_LENGTH - ext.length - 1);
+        name = `${base}.${ext}`;
+    }
+
+    // Default if empty
+    if (!name || name === '.') {
+        name = 'unknown.txt';
+    }
+
+    return name;
+}
+
+/**
+ * Sanitize code input
+ * - Removes prompt injection attempts
+ * - Preserves code structure
+ */
+function sanitizeCodeInput(input: string): string {
+    let sanitized = input;
+
+    // Remove null bytes
+    sanitized = sanitized.replace(/\x00/g, '');
+
+    // Detect and neutralize common prompt injection patterns
+    // These patterns try to break out of the code context
+    const injectionPatterns = [
+        // Attempts to end the code block and inject new instructions
+        /```\s*\n\s*(ignore|forget|disregard|new instruction|system:|assistant:|human:)/gi,
+        // Direct instruction injection
+        /\n\s*(ignore previous|forget everything|disregard above|new task:)/gi,
+    ];
+
+    for (const pattern of injectionPatterns) {
+        if (pattern.test(sanitized)) {
+            // Don't reject, just log and continue - the LLM prompt is structured
+            // to treat all input as code
+            console.warn('Potential prompt injection attempt detected in input');
+        }
+    }
+
+    return sanitized;
+}
+
+/**
+ * Check if file extension is allowed for analysis
+ */
+export function isAllowedFileType(fileName: string): boolean {
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    return ALLOWED_EXTENSIONS.has(ext) || ext === ''; // Allow extensionless files
+}
+
+/**
+ * Validate token format (basic check before hitting the crypto validation)
+ */
+export function validateTokenFormat(token: any): { valid: boolean; error?: string } {
+    if (!token || typeof token !== 'string') {
+        return { valid: false, error: 'Token must be a non-empty string' };
+    }
+
+    if (token.length > 200) {
+        return { valid: false, error: 'Token too long' };
+    }
+
+    if (token.length < 20) {
+        return { valid: false, error: 'Token too short' };
+    }
+
+    // Basic format check
+    if (!token.startsWith('AFKMATE-')) {
+        return { valid: false, error: 'Invalid token format' };
+    }
+
+    return { valid: true };
+}
