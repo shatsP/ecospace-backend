@@ -1,8 +1,17 @@
 /**
  * Simple in-memory rate limiter for serverless environments
  *
- * Note: For production at scale, consider using @upstash/ratelimit with Redis
- * This implementation works for moderate traffic on Vercel
+ * ⚠️ PRODUCTION WARNING:
+ * This in-memory implementation resets on serverless cold starts and doesn't
+ * work across multiple instances. For production at scale, use a distributed
+ * rate limiter with Redis:
+ * 
+ * Recommended: @upstash/ratelimit (https://github.com/upstash/ratelimit)
+ * 
+ * This implementation is suitable for:
+ * - Development and testing
+ * - Small to moderate traffic
+ * - Single-region deployments with infrequent cold starts
  */
 
 interface RateLimitEntry {
