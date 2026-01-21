@@ -10,7 +10,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production" || process.env.VERCE
 export async function POST(req: NextRequest) {
     // Rate limiting to prevent brute force attacks
     const clientId = getClientIdentifier(req);
-    const rateLimit = checkRateLimit(clientId, RATE_LIMITS.validateToken);
+    const rateLimit = await checkRateLimit(clientId, RATE_LIMITS.validateToken);
 
     if (!rateLimit.success) {
         return NextResponse.json(

@@ -124,6 +124,12 @@ Edit `.env.local` and add:
 - `NEXT_GEMINI_API_KEY` - Your Gemini API key
 - `AFKMATE_TOKEN_SECRET` - Secret for token signing (generate with `openssl rand -hex 32`)
 
+**Optional (Recommended for Production):**
+- `UPSTASH_REDIS_REST_URL` - Your Upstash Redis REST URL
+- `UPSTASH_REDIS_REST_TOKEN` - Your Upstash Redis REST token
+
+> **Note:** Without Redis, the app uses in-memory rate limiting (suitable for development only).
+
 ### Development
 
 ```bash
@@ -149,7 +155,33 @@ vercel
 Set environment variables in Vercel dashboard:
 - `NEXT_GEMINI_API_KEY`
 - `AFKMATE_TOKEN_SECRET`
+- `UPSTASH_REDIS_REST_URL` (recommended)
+- `UPSTASH_REDIS_REST_TOKEN` (recommended)
 - `NODE_ENV=production`
+
+### Production Rate Limiting (Recommended)
+Redis-based (Upstash) or in-memory fallback
+For production deployments, use Redis-based rate limiting:
+
+1. **Create Upstash Redis Database:**
+   - Go to [console.upstash.com/redis](https://console.upstash.com/redis)
+   - Click "Create Database"
+   - Choose region closest to your Vercel deployment
+   - Copy the **REST URL** and **REST TOKEN**
+
+2. **Configure Environment Variables:**
+   ```bash
+   UPSTASH_REDIS_REST_URL=https://your-db.upstash.io
+   UPSTASH_REDIS_REST_TOKEN=your_token_here
+   ```
+
+3. **Benefits:**
+   - Distributed rate limiting across all serverless instances
+   - Persistent across cold starts
+   - Analytics and monitoring built-in
+   - Handles high traffic reliably
+
+Without Redis, the app falls back to in-memory rate limiting (resets on cold starts).
 
 ## Security
 
@@ -168,6 +200,8 @@ Set environment variables in Vercel dashboard:
 | `NEXT_GEMINI_API_KEY` | Yes | - | Gemini API key for LLM |
 | `AFKMATE_TOKEN_SECRET` | Yes (prod) | - | Secret for HMAC token signing |
 | `GEMINI_MODEL` | No | `gemini-2.0-flash` | Gemini model to use |
+| `UPSTASH_REDIS_REST_URL` | No | - | Upstash Redis URL for distributed rate limiting |
+| `UPSTASH_REDIS_REST_TOKEN` | No | - | Upstash Redis token |
 | `NODE_ENV` | No | `development` | Environment mode |
 
 ### CORS Origins
@@ -198,12 +232,7 @@ app/
 └── middleware.ts        # CORS & routing
 ```
 
-## Limitations
-
-### Rate Limiting
-Current in-memory rate limiter resets on serverless cold starts. For production at scale:
-- Use Redis-based solution like [@upstash/ratelimit](https://github.com/upstash/ratelimit)
-- Or implement distributed rate limiting
+## L implement distributed rate limiting
 
 ### Token Generation
 `generateToken()` utility is available in `app/utils/token.ts` for internal use. Not exposed via API endpoint.

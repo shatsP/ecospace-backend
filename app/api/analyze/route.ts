@@ -6,7 +6,7 @@ import { validateAnalysisInput } from "../../utils/validation";
 export async function POST(req: NextRequest) {
   // Rate limiting
   const clientId = getClientIdentifier(req);
-  const rateLimit = checkRateLimit(clientId, RATE_LIMITS.analyze);
+  const rateLimit = await checkRateLimit(clientId, RATE_LIMITS.analyze);
 
   if (!rateLimit.success) {
     return NextResponse.json(
