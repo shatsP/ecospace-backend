@@ -2,12 +2,23 @@
  * Input validation and sanitization utilities
  */
 
+export interface IssueDetails {
+    line: number;
+    message: string;
+    type: string;
+    severity: string;
+}
+
 export interface ValidationResult {
     valid: boolean;
     error?: string;
     sanitized?: {
         input: string;
         fileName: string;
+        mode?: 'analyze' | 'fix';
+        issue?: IssueDetails;
+        fullFileContext?: string;
+        issueLineInFile?: number;
     };
 }
 
@@ -52,7 +63,7 @@ export function validateAnalysisInput(body: any): ValidationResult {
         return { valid: false, error: 'Request body must be a JSON object' };
     }
 
-    const { input, fileName } = body;
+    const { input, fileName, mode, issue, fullFileContext, issueLineInFile } = body;
 
     // Validate input field
     if (input === undefined || input === null) {
@@ -96,11 +107,41 @@ export function validateAnalysisInput(body: any): ValidationResult {
     // Sanitize input - remove potential prompt injection markers
     const sanitizedInput = sanitizeCodeInput(input);
 
+    // Validate mode if provided
+    const sanitizedMode = mode === 'fix' ? 'fix' : 'analyze';
+
+    // Validate issue details for fix mode
+    let sanitizedIssue: IssueDetails | undefined;
+    if (sanitizedMode === 'fix' && issue) {
+        if (typeof issue !== 'object') {
+            return { valid: false, error: "'issue' must be an object" };
+        }
+        sanitizedIssue = {
+            line: typeof issue.line === 'number' ? issue.line : 0,
+            message: typeof issue.message === 'string' ? issue.message.substring(0, 1000) : '',
+            type: typeof issue.type === 'string' ? issue.type : 'unknown',
+            severity: typeof issue.severity === 'string' ? issue.severity : 'warning'
+        };
+    }
+
+    // Sanitize fullFileContext if provided (for fix mode)
+    let sanitizedFullContext: string | undefined;
+    if (fullFileContext && typeof fullFileContext === 'string') {
+        sanitizedFullContext = sanitizeCodeInput(fullFileContext.substring(0, MAX_INPUT_LENGTH));
+    }
+
+    // Validate issueLineInFile
+    const sanitizedIssueLineInFile = typeof issueLineInFile === 'number' ? issueLineInFile : undefined;
+
     return {
         valid: true,
         sanitized: {
             input: sanitizedInput,
-            fileName: sanitizedFileName
+            fileName: sanitizedFileName,
+            mode: sanitizedMode,
+            issue: sanitizedIssue,
+            fullFileContext: sanitizedFullContext,
+            issueLineInFile: sanitizedIssueLineInFile
         }
     };
 }

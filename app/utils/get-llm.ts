@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { buildPrompt, AnalysisResult } from "./prompt";
+import { buildPrompt, buildFixPrompt, AnalysisResult, FixResult, IssueForFix } from "./prompt";
 
 const ai = new GoogleGenAI({ apiKey: process.env.NEXT_GEMINI_API_KEY! });
 
@@ -102,4 +102,54 @@ export async function getLLMFallbackResponse(
   console.log("[LLM Raw Response]", text);
 
   return parseAndValidateResponse(text);
+}
+
+function parseAndValidateFixResponse(text: string): FixResult {
+  // Extract JSON from response (handle markdown code blocks if present)
+  let jsonString = text.trim();
+  if (jsonString.startsWith("```json")) {
+    jsonString = jsonString.slice(7);
+  } else if (jsonString.startsWith("```")) {
+    jsonString = jsonString.slice(3);
+  }
+  if (jsonString.endsWith("```")) {
+    jsonString = jsonString.slice(0, -3);
+  }
+  jsonString = jsonString.trim();
+
+  const parsed = JSON.parse(jsonString);
+
+  // Validate required structure
+  if (!parsed.fixedCode || typeof parsed.fixedCode !== "string") {
+    throw new Error("Invalid fix response: missing fixedCode");
+  }
+
+  return {
+    fixedCode: parsed.fixedCode,
+    explanation: parsed.explanation || "Fix applied",
+    confidence: parsed.confidence || "medium"
+  } as FixResult;
+}
+
+export async function getLLMFixResponse(
+  codeSection: string,
+  issue: IssueForFix,
+  fileName?: string,
+  fullFileContext?: string
+): Promise<FixResult> {
+  const prompt = buildFixPrompt(codeSection, issue, fileName, fullFileContext);
+
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: [prompt],
+  });
+
+  const text = response.text;
+  if (!text) {
+    throw new Error("LLM returned empty response");
+  }
+
+  console.log("[LLM Fix Raw Response]", text);
+
+  return parseAndValidateFixResponse(text);
 }

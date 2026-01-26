@@ -2,6 +2,19 @@ export type Confidence = "high" | "medium" | "low";
 export type Severity = "low" | "medium" | "high" | "critical";
 export type Status = "safe" | "warning" | "critical";
 
+export interface FixResult {
+  fixedCode: string;
+  explanation: string;
+  confidence: Confidence;
+}
+
+export interface IssueForFix {
+  line: number;
+  message: string;
+  type: string;
+  severity: string;
+}
+
 export interface AnalysisResult {
   summary: {
     errorsCount: number;
@@ -321,4 +334,61 @@ ${SCHEMA_DEFINITION}
 ${codeSection}
 
 Analyze step-by-step. Return ONLY the JSON object, starting with { and ending with }. No markdown, no explanation.`;
+}
+
+const FIX_SCHEMA_DEFINITION = `{
+  "fixedCode": "// The corrected code goes here",
+  "explanation": "Explanation of what was fixed and why",
+  "confidence": "high"|"medium"|"low"
+}`;
+
+/**
+ * Build a prompt for fixing a specific issue in code
+ */
+export function buildFixPrompt(
+  codeSection: string,
+  issue: IssueForFix,
+  fileName?: string,
+  fullFileContext?: string
+): string {
+  const langInfo = detectLanguage(fileName || "unknown.txt");
+  const fileInfo = fileName ? `File: ${fileName} (${langInfo.language})` : '';
+  const contextSection = fullFileContext
+    ? `\nFull file context (for reference only - fix the code section below):\n\`\`\`\n${fullFileContext.substring(0, 10000)}\n\`\`\`\n`
+    : '';
+
+  return `You are a senior software engineer fixing a specific code issue. Return ONLY valid JSON.
+
+${fileInfo}
+
+ISSUE TO FIX:
+- Line: ${issue.line}
+- Type: ${issue.type}
+- Severity: ${issue.severity}
+- Message: ${issue.message}
+${contextSection}
+CODE SECTION TO FIX:
+\`\`\`
+${codeSection}
+\`\`\`
+
+INSTRUCTIONS:
+1. Analyze the issue and understand the root cause
+2. Generate the FIXED version of the code section above
+3. The fixed code should:
+   - Resolve the specific issue mentioned
+   - Maintain the same structure and style
+   - Not introduce new issues
+   - Be a drop-in replacement for the code section
+
+CONFIDENCE SCORING:
+- "high": The fix is straightforward and definitively resolves the issue
+- "medium": The fix should work but depends on context outside the visible code
+- "low": The fix is a best guess; more context would help
+
+JSON SCHEMA:
+${FIX_SCHEMA_DEFINITION}
+
+Return ONLY the JSON object with the fixed code. Start with { and end with }. Nothing else.
+The "fixedCode" field should contain the complete fixed version of the code section.`;
 }

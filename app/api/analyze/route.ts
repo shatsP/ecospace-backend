@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLLMFallbackResponse } from "../../utils/get-llm";
+import { getLLMFallbackResponse, getLLMFixResponse } from "../../utils/get-llm";
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "../../utils/rate-limit";
 import { validateAnalysisInput } from "../../utils/validation";
 
@@ -47,10 +47,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { input, fileName } = validation.sanitized!;
+    const { input, fileName, mode, issue, fullFileContext } = validation.sanitized!;
 
-    // Call LLM
-    const result = await getLLMFallbackResponse(fileName, input);
+    let result;
+
+    // Handle fix mode vs analyze mode
+    if (mode === 'fix' && issue) {
+      // Fix mode: generate a fix for a specific issue
+      console.log(`[Fix Mode] Generating fix for issue at line ${issue.line}: ${issue.message}`);
+      result = await getLLMFixResponse(input, issue, fileName, fullFileContext);
+    } else {
+      // Analyze mode: run full analysis
+      result = await getLLMFallbackResponse(fileName, input);
+    }
 
     // Return with rate limit headers
     return NextResponse.json(
