@@ -100,7 +100,7 @@ Health check endpoint.
 
 ### Prerequisites
 - Node.js 20+
-- Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- Anthropic API key from [Anthropic Console](https://console.anthropic.com/)
 
 ### Installation
 
@@ -121,8 +121,9 @@ cp .env.example .env.local
 ```
 
 Edit `.env.local` and add:
-- `NEXT_GEMINI_API_KEY` - Your Gemini API key
+- `ANTHROPIC_API_KEY` - Your Claude API key
 - `AFKMATE_TOKEN_SECRET` - Secret for token signing (generate with `openssl rand -hex 32`)
+- `CLAUDE_MODEL` - (Optional) Model to use: `claude-3-5-sonnet-20241022` (default) or `claude-3-5-haiku-20241022`
 
 **Optional (Recommended for Production):**
 - `UPSTASH_REDIS_REST_URL` - Your Upstash Redis REST URL
@@ -153,8 +154,9 @@ vercel
 ```
 
 Set environment variables in Vercel dashboard:
-- `NEXT_GEMINI_API_KEY`
+- `ANTHROPIC_API_KEY`
 - `AFKMATE_TOKEN_SECRET`
+- `CLAUDE_MODEL` (optional, defaults to claude-3-5-sonnet-20241022)
 - `UPSTASH_REDIS_REST_URL` (recommended)
 - `UPSTASH_REDIS_REST_TOKEN` (recommended)
 - `NODE_ENV=production`
@@ -197,9 +199,9 @@ Without Redis, the app falls back to in-memory rate limiting (resets on cold sta
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `NEXT_GEMINI_API_KEY` | Yes | - | Gemini API key for LLM |
+| `ANTHROPIC_API_KEY` | Yes | - | Claude API key for LLM |
 | `AFKMATE_TOKEN_SECRET` | Yes (prod) | - | Secret for HMAC token signing |
-| `GEMINI_MODEL` | No | `gemini-2.0-flash` | Gemini model to use |
+| `CLAUDE_MODEL` | No | `claude-3-5-sonnet-20241022` | Claude model: sonnet (best) or haiku (cheaper) |
 | `UPSTASH_REDIS_REST_URL` | No | - | Upstash Redis URL for distributed rate limiting |
 | `UPSTASH_REDIS_REST_TOKEN` | No | - | Upstash Redis token |
 | `NODE_ENV` | No | `development` | Environment mode |
