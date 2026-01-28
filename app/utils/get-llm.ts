@@ -7,7 +7,7 @@ const anthropic = new Anthropic({
 
 // Model can be configured via environment variable
 // Options: claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
-const MODEL = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20241022";
+const MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514";
 
 /**
  * Extract JSON from Claude response, handling markdown code blocks
